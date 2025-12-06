@@ -1,6 +1,7 @@
 const MAX_BODY_SIZE = 10000
 const MAX_TEXT = 900
 const MAX_FIELD = 120
+const AUTH_HEADER = 'x-error-report-token'
 
 function isPlainObject(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -57,8 +58,23 @@ module.exports = async function handler(req, res) {
     }
 
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL
+    const authToken = process.env.ERROR_REPORT_TOKEN
+
     if (!webhookUrl) {
         res.status(500).json({ error: 'Webhook not configured' })
+        return
+    }
+
+    if (!authToken) {
+        res.status(500).json({ error: 'Reporting token not configured' })
+        return
+    }
+
+    const providedHeader = req.headers?.[AUTH_HEADER]
+    const providedToken = Array.isArray(providedHeader) ? providedHeader[0] : providedHeader
+
+    if (!providedToken || providedToken !== authToken) {
+        res.status(401).json({ error: 'Unauthorized' })
         return
     }
 
