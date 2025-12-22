@@ -41,14 +41,15 @@ function sanitizeSensitiveText(text: string): string {
 
 /**
  * Build the Discord payload from error and context (sanitizes content)
+ * Returns null if error should be filtered (prevents sending)
  */
-function buildDiscordPayload(config: Config, error: Error | string, additionalContext?: Record<string, unknown>) {
+function buildDiscordPayload(config: Config, error: Error | string, additionalContext?: Record<string, unknown>): { username: string; avatar_url?: string; embeds: DiscordEmbed[] } | null {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const sanitizedForLogging = sanitizeSensitiveText(errorMessage)
 
     if (!shouldReportError(errorMessage)) {
         process.stderr.write(`[ErrorReporting] Filtered error (expected/benign): ${sanitizedForLogging.substring(0, 100)}\n`)
-        return { username: 'Microsoft-Rewards-Bot Error Reporter', content: 'Filtered error (not reported)' }
+        return null // FIXED: Return null instead of sending dummy message
     }
 
     const errorStack = error instanceof Error ? error.stack : undefined
@@ -434,7 +435,15 @@ export async function sendErrorReport(
             process.stderr.write(`[ErrorReporting] Trying webhook: ${webhookUrl}\n`)
 
             try {
-                const response = await axios.post(webhookUrl, buildDiscordPayload(config, error, additionalContext), {
+                // FIXED: Check if payload is null (filtered error)
+                const payload = buildDiscordPayload(config, error, additionalContext)
+                if (!payload) {
+                    process.stderr.write('[ErrorReporting] Skipping webhook send (error was filtered)\n')
+                    sent = true // Mark as "sent" to prevent fallback error message
+                    break
+                }
+
+                const response = await axios.post(webhookUrl, payload, {
                     headers: { 'Content-Type': 'application/json' },
                     timeout: 10000
                 })

@@ -31,6 +31,57 @@ export class PasskeyHandler {
         }).catch(logError('LOGIN-FIDO', 'Route interception setup failed', this.bot.isMobile))
     }
 
+    /**
+     * Setup dialog handlers to automatically dismiss native browser dialogs
+     * CRITICAL: This handles Bluetooth/Windows Hello/Passkey prompts that appear as native browser dialogs
+     * These are NOT DOM elements and cannot be clicked - they must be dismissed via page.on('dialog')
+     */
+    public setupDialogHandlers(page: Page) {
+        // Remove any existing listeners to prevent duplicates
+        page.removeAllListeners('dialog')
+
+        page.on('dialog', async (dialog) => {
+            const message = dialog.message()
+            const type = dialog.type()
+
+            this.bot.log(
+                this.bot.isMobile,
+                'LOGIN-DIALOG',
+                `Native browser dialog detected: [${type}] "${message.substring(0, 100)}"`,
+                'warn'
+            )
+
+            // Auto-dismiss all dialogs (alert, confirm, prompt, beforeunload)
+            // For passkey/Bluetooth prompts, we want to DISMISS (equivalent to Cancel)
+            try {
+                if (type === 'beforeunload') {
+                    // Accept beforeunload to allow navigation
+                    await dialog.accept()
+                    this.bot.log(this.bot.isMobile, 'LOGIN-DIALOG', 'Accepted beforeunload dialog', 'log', 'green')
+                } else {
+                    // Dismiss all other dialogs (passkey, Bluetooth, alerts)
+                    await dialog.dismiss()
+                    this.bot.log(
+                        this.bot.isMobile,
+                        'LOGIN-DIALOG',
+                        `Dismissed ${type} dialog: "${message.substring(0, 50)}"`,
+                        'log',
+                        'green'
+                    )
+                }
+            } catch (error) {
+                this.bot.log(
+                    this.bot.isMobile,
+                    'LOGIN-DIALOG',
+                    `Failed to handle dialog: ${error instanceof Error ? error.message : String(error)}`,
+                    'error'
+                )
+            }
+        })
+
+        this.bot.log(this.bot.isMobile, 'LOGIN-DIALOG', 'Dialog handlers installed (auto-dismiss enabled)', 'log', 'cyan')
+    }
+
     public async handlePasskeyPrompts(page: Page, context: 'main' | 'oauth') {
         let did = false
 
