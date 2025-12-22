@@ -63,11 +63,11 @@ class DashboardState {
   setRunning(running: boolean, currentAccount?: string): void {
     this.status.running = running
     this.status.currentAccount = currentAccount
-    
+
     if (running && !this.status.startTime) {
       this.status.startTime = new Date().toISOString()
     }
-    
+
     if (!running) {
       this.status.lastRun = new Date().toISOString()
       this.status.startTime = undefined
@@ -75,7 +75,7 @@ class DashboardState {
         this.status.currentAccount = undefined
       }
     }
-    
+
     this.notifyChange('status', this.getStatus())
   }
 
@@ -127,17 +127,17 @@ class DashboardState {
   private maskEmail(email: string): string {
     const parts = email.split('@')
     if (parts.length !== 2) return '***@***'
-    
+
     const [local, domain] = parts
     if (!local || !domain) return '***@***'
-    
+
     // SECURITY: More aggressive masking to prevent account enumeration
     const maskedLocal = local.length <= 2 ? '**' : local.slice(0, 2) + '*'.repeat(Math.min(local.length - 2, 5))
-    
+
     const domainParts = domain.split('.')
     const tld = domainParts.pop() || 'com'
     const maskedDomain = domain.length <= 4 ? '***.' + tld : domain.slice(0, 2) + '***.' + tld
-    
+
     return `${maskedLocal}@${maskedDomain}`
   }
 
@@ -145,7 +145,7 @@ class DashboardState {
   public initializeAccounts(emails: string[]): void {
     // Load points from sessions if available
     const pointsMap = loadAllPointsFromSessions()
-    
+
     for (const email of emails) {
       if (!this.accounts.has(email)) {
         // Try to get points from session or job state
@@ -153,7 +153,7 @@ class DashboardState {
         if (points === undefined) {
           points = loadPointsFromJobState(email)
         }
-        
+
         this.accounts.set(email, {
           email,
           maskedEmail: this.maskEmail(email),
