@@ -220,6 +220,88 @@ function setChartPeriod(period, btn) {
 function loadInitialData() {
     fetch('/api/status').then((r) => { return r.json() }).then(updateBotStatus).catch(() => { })
     fetch('/api/accounts').then((r) => { return r.json() }).then(renderAccounts).catch(() => { })
+    loadAccountHistoryData() // FIXED: Load real historical data for charts
+}
+
+// FIXED: Load account history from API to populate charts with real data
+function loadAccountHistoryData() {
+    fetch('/api/account-history')
+        .then((r) => r.json())
+        .then((histories) => {
+            if (histories && Object.keys(histories).length > 0) {
+                updateChartsWithRealData(histories)
+            }
+        })
+        .catch((e) => {
+            console.warn('[History] Failed to load:', e)
+        })
+}
+
+// FIXED: Update charts with real historical data
+function updateChartsWithRealData(histories) {
+    var last7Days = {}
+    var activityCounts = {
+        'Desktop Search': 0,
+        'Mobile Search': 0,
+        'Daily Set': 0,
+        'Quizzes': 0,
+        'Other': 0
+    }
+
+    // Process each account's history
+    Object.values(histories).forEach((accountHistory) => {
+        if (!accountHistory.history) return
+
+        accountHistory.history.forEach((entry) => {
+            var date = entry.date || entry.timestamp.split('T')[0]
+
+            // Aggregate points by day
+            if (!last7Days[date]) {
+                last7Days[date] = 0
+            }
+            last7Days[date] += entry.totalPoints || 0
+
+            // Count activity types
+            if (entry.completedActivities) {
+                entry.completedActivities.forEach((activity) => {
+                    if (activity.includes('Search')) {
+                        if (entry.desktopPoints > 0) activityCounts['Desktop Search']++
+                        if (entry.mobilePoints > 0) activityCounts['Mobile Search']++
+                    } else if (activity.includes('DailySet')) {
+                        activityCounts['Daily Set']++
+                    } else if (activity.includes('Quiz') || activity.includes('Poll')) {
+                        activityCounts['Quizzes']++
+                    } else {
+                        activityCounts['Other']++
+                    }
+                })
+            }
+        })
+    })
+
+    // Update points chart with last 7 days
+    if (pointsChart) {
+        var sortedDates = Object.keys(last7Days).sort().slice(-7)
+        var labels = sortedDates.map((d) => {
+            var date = new Date(d)
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        })
+        var data = sortedDates.map((d) => { return last7Days[d] })
+
+        pointsChart.data.labels = labels.length > 0 ? labels : generateDateLabels(7)
+        pointsChart.data.datasets[0].data = data.length > 0 ? data : generatePlaceholderData(7)
+        pointsChart.update()
+    }
+
+    // Update activity chart
+    if (activityChart) {
+        var total = Object.values(activityCounts).reduce((sum, val) => { return sum + val }, 0)
+        if (total > 0) {
+            activityChart.data.labels = Object.keys(activityCounts)
+            activityChart.data.datasets[0].data = Object.values(activityCounts)
+            activityChart.update()
+        }
+    }
 }
 
 function refreshData() {
@@ -531,8 +613,36 @@ function runSingleAccount() {
 function executeSingleAccount() {
     var select = document.getElementById('singleAccountSelect')
     if (!select) return
+
+    var email = select.value
     closeModal()
-    showToast('Running account: ' + maskEmail(select.value), 'info')
+
+    if (!email) {
+        showToast('No account selected', 'error')
+        return
+    }
+
+    showToast('Starting bot for: ' + maskEmail(email), 'info')
+
+    // Call API to run single account
+    fetch('/api/run-single', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email })
+    })
+        .then((res) => res.json())
+        .then((data) => {
+            if (data.success) {
+                showToast('✓ Bot started for account: ' + maskEmail(email), 'success')
+                loadStatus()
+            } else {
+                showToast('✗ Failed to start: ' + (data.error || 'Unknown error'), 'error')
+            }
+        })
+        .catch((err) => {
+            console.error('[API] Run single failed:', err)
+            showToast('✗ Request failed: ' + err.message, 'error')
+        })
 }
 
 function exportLogs() {

@@ -199,6 +199,34 @@ apiRouter.post('/restart', async (_req: Request, res: Response): Promise<void> =
   }
 })
 
+// POST /api/run-single - Run a single account (dashboard feature)
+apiRouter.post('/run-single', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body
+
+    if (!email) {
+      sendError(res, 400, 'Email is required')
+      return
+    }
+
+    const status = botController.getStatus()
+    if (status.running) {
+      sendError(res, 400, `Bot already running (PID: ${status.pid}). Stop it first.`)
+      return
+    }
+
+    const result = await botController.runSingle(email)
+
+    if (result.success) {
+      sendSuccess(res, { message: `Started bot for account ${email}`, pid: result.pid })
+    } else {
+      sendError(res, 500, result.error || 'Failed to start bot for account')
+    }
+  } catch (error) {
+    sendError(res, 500, getErr(error))
+  }
+})
+
 // GET /api/metrics - Basic metrics
 apiRouter.get('/metrics', (_req: Request, res: Response) => {
   try {

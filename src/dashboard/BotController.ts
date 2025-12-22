@@ -106,6 +106,81 @@ export class BotController {
     return await this.start()
   }
 
+  /**
+   * Run a single account (for dashboard "run single" feature)
+   * FIXED: Actually implement single account execution
+   */
+  public async runSingle(email: string): Promise<{ success: boolean; error?: string; pid?: number }> {
+    if (this.botInstance) {
+      return { success: false, error: 'Bot is already running. Stop it first.' }
+    }
+
+    if (this.isStarting) {
+      return { success: false, error: 'Bot is currently starting, please wait' }
+    }
+
+    try {
+      this.isStarting = true
+      this.log(`🚀 Starting bot for single account: ${email}`, 'log')
+
+      const { MicrosoftRewardsBot } = await import('../index')
+      const { loadAccounts } = await import('../util/state/Load')
+
+      // Load all accounts and filter to just this one
+      const allAccounts = loadAccounts()
+      const targetAccount = allAccounts.find(a => a.email === email)
+
+      if (!targetAccount) {
+        return { success: false, error: `Account ${email} not found in accounts.jsonc` }
+      }
+
+      this.botInstance = new MicrosoftRewardsBot(false)
+      this.startTime = new Date()
+      dashboardState.setRunning(true)
+      dashboardState.setBotInstance(this.botInstance)
+
+      // Update account status
+      dashboardState.updateAccount(email, { status: 'running', errors: [] })
+
+      // Run bot asynchronously with single account
+      void (async () => {
+        try {
+          this.log(`✓ Bot initialized for ${email}, starting execution...`, 'log')
+
+          await this.botInstance!.initialize()
+
+            // Override accounts to run only this one
+            ; (this.botInstance as any).accounts = [targetAccount]
+
+          await this.botInstance!.run()
+
+          this.log(`✓ Bot completed successfully for ${email}`, 'log')
+          dashboardState.updateAccount(email, { status: 'completed' })
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error)
+          this.log(`Bot error for ${email}: ${errMsg}`, 'error')
+          dashboardState.updateAccount(email, {
+            status: 'error',
+            errors: [errMsg]
+          })
+        } finally {
+          this.cleanup()
+        }
+      })()
+
+      return { success: true, pid: process.pid }
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      this.log(`Failed to start bot for ${email}: ${errorMsg}`, 'error')
+      dashboardState.updateAccount(email, { status: 'error', errors: [errorMsg] })
+      this.cleanup()
+      return { success: false, error: errorMsg }
+    } finally {
+      this.isStarting = false
+    }
+  }
+
   private async wait(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms))
   }
