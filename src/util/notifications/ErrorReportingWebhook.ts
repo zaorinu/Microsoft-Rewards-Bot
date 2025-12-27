@@ -374,6 +374,10 @@ export async function sendErrorReport(
     error: Error | string,
     additionalContext?: Record<string, unknown>
 ): Promise<void> {
+    // Error reporting not available as 12/26/2025 because of vulnerabilities
+    // View here: https://ptb.discord.com/channels/1418201715009912866/1418201717098418249/1454198384813412534
+    return
+    
     // Check if error reporting is enabled
     if (config.errorReporting?.enabled === false) {
         process.stderr.write('[ErrorReporting] Disabled in config (errorReporting.enabled = false)\n')
@@ -382,7 +386,7 @@ export async function sendErrorReport(
 
     // Log that error reporting is enabled
     process.stderr.write('[ErrorReporting] Enabled, processing error...\n')
-
+    
     try {
         pruneExpiredDisabledWebhooks()
         // Build candidate webhook list:
