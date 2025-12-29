@@ -106,6 +106,10 @@ cp your-old-accounts.jsonc src/accounts.jsonc
 
 ---
 
+### 📦 Backup Repository
+In case the main repository is unavailable, a backup is available at the following address:
+🔗 [git.justw.tf/Light-Zirconite/Microsoft-Rewards-Bot](https://git.justw.tf/Light-Zirconite/Microsoft-Rewards-Bot)
+
 <p align="center">
 	<a href="https://discord.gg/k5uHkx9mne">Discord</a> · 
 	<a href="docs/index.md">Documentation</a> · 
